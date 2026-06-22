@@ -1,0 +1,17 @@
+.agents/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+backend/runtime/*
+!backend/runtime/jobs/
+backend/runtime/jobs/*
+!backend/runtime/jobs/.gitkeep
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+.env
+*.log

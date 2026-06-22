@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import asyncio
+import shutil
+from pathlib import Path
+
+import cv2
+
+from app.config import Settings
+from app.infrastructure.job_store import InMemoryJobStore, VideoJob
+from app.services.inference import InferenceService, NoPersonDetectedError
+
+
+class VideoService:
+    def __init__(self, inference: InferenceService, jobs: InMemoryJobStore, settings: Settings):
+        self.inference = inference
+        self.jobs = jobs
+        self.settings = settings
+        self.job_dir = settings.runtime_dir / "jobs"
+        self.job_dir.mkdir(parents=True, exist_ok=True)
+
+    async def submit(self, filename: str, model_id: str, payload: bytes) -> VideoJob:
+        job = self.jobs.create(filename, model_id)
+        source = self.job_dir / f"{job.id}-source{Path(filename).suffix or '.mp4'}"
+        source.write_bytes(payload)
+        asyncio.create_task(asyncio.to_thread(self._process, job.id, source))
+        return job
+
+    def _process(self, job_id: str, source: Path) -> None:
+        output = self.job_dir / f"{job_id}.mp4"
+        capture = cv2.VideoCapture(str(source))
+        try:
+            if not capture.isOpened():
+                raise ValueError("The video could not be opened.")
+            source_fps = capture.get(cv2.CAP_PROP_FPS) or 24
+            total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            max_source_frames = int(min(total or source_fps * self.settings.maximum_video_seconds, source_fps * self.settings.maximum_video_seconds))
+            step = max(1, round(source_fps / self.settings.maximum_video_fps))
+            output_fps = min(source_fps, self.settings.maximum_video_fps)
+            writer = None
+            self.jobs.update(job_id, state="processing")
+            frame_index = 0
+            written = 0
+            while frame_index < max_source_frames:
+                job = self.jobs.get(job_id)
+                if job is None or job.cancelled:
+                    return
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                if frame_index % step == 0:
+                    try:
+                        result = self.inference.infer(frame, job.model_id)
+                        avatar = self.inference.media.decode_data_url(result.avatar)
+                    except NoPersonDetectedError:
+                        avatar = frame
+                    if writer is None:
+                        height, width = avatar.shape[:2]
+                        writer = cv2.VideoWriter(str(output), cv2.VideoWriter_fourcc(*"avc1"), output_fps, (width, height))
+                        if not writer.isOpened():
+                            writer = cv2.VideoWriter(str(output), cv2.VideoWriter_fourcc(*"mp4v"), output_fps, (width, height))
+                    writer.write(avatar)
+                    written += 1
+                frame_index += 1
+                self.jobs.update(job_id, progress=min(99, frame_index / max(1, max_source_frames) * 100))
+            if writer is None or not writer.isOpened() or written == 0:
+                raise ValueError("No usable frames were found in the video.")
+            writer.release()
+            writer = None
+            self.jobs.update(job_id, state="completed", progress=100, result_url=f"/api/v1/video-jobs/{job_id}/result")
+        except Exception as exc:
+            self.jobs.update(job_id, state="failed", error=f"{type(exc).__name__}: {exc}")
+        finally:
+            capture.release()
+            if 'writer' in locals() and writer is not None:
+                writer.release()
+            source.unlink(missing_ok=True)
