@@ -13,6 +13,10 @@ class VideoJob:
     filename: str = ""
     model_id: str = ""
     result_url: str | None = None
+    avatar_url: str | None = None
+    skeleton_url: str | None = None
+    avatar_preview_url: str | None = None
+    skeleton_preview_url: str | None = None
     error: str | None = None
     cancelled: bool = False
 
@@ -45,4 +49,3 @@ class InMemoryJobStore:
 
     def cancel(self, job_id: str) -> VideoJob:
         return self.update(job_id, cancelled=True, state="cancelled")
-

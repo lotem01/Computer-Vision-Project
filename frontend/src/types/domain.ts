@@ -49,6 +49,19 @@ export interface VideoJob {
   filename: string
   model_id: string
   result_url?: string | null
+  avatar_url?: string | null
+  skeleton_url?: string | null
+  avatar_preview_url?: string | null
+  skeleton_preview_url?: string | null
   error?: string | null
 }
 
+export interface DecodedVideoResult {
+  jobId: string
+  filename: string
+  source: string
+  avatar: string
+  skeleton: string
+  avatarPreview?: string | null
+  skeletonPreview?: string | null
+}

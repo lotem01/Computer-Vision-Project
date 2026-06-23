@@ -87,6 +87,8 @@ async def live(websocket: WebSocket):
                 image = app.state.media.decode_image(payload)
                 result = await app.state.run_inference(image, model_id, frame_id)
                 await websocket.send_json({"type": "result", "data": result.model_dump(mode="json", by_alias=True)})
+            except NoPersonDetectedError:
+                await websocket.send_json({"type": "no_pose", "frameId": frame_id})
             except Exception as exc:
                 await websocket.send_json({"type": "error", "frameId": frame_id, "message": str(exc)})
     except WebSocketDisconnect:
@@ -126,10 +128,33 @@ async def cancel_video_job(request: Request, job_id: str):
 
 
 @router.get("/video-jobs/{job_id}/result")
-async def video_result(request: Request, job_id: str):
+async def video_result_alias(request: Request, job_id: str, download: bool = False):
+    return await video_result(request, job_id, "avatar", download)
+
+
+@router.get("/video-jobs/{job_id}/result/{kind}")
+async def video_result(request: Request, job_id: str, kind: str, download: bool = False):
     job = request.app.state.jobs.get(job_id)
-    path = request.app.state.settings.runtime_dir / "jobs" / f"{job_id}.mp4"
+    if kind not in {"avatar", "skeleton"}:
+        raise HTTPException(404, "Video result type is not available")
+    path = request.app.state.settings.runtime_dir / "jobs" / f"{job_id}-{kind}.mp4"
     if job is None or job.state != "completed" or not path.exists():
         raise HTTPException(404, "Video result is not available")
-    return FileResponse(path, media_type="video/mp4", filename=f"pose-avatar-{job_id[:8]}.mp4")
+    label = "pose-avatar" if kind == "avatar" else "pose-map"
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        filename=f"{label}-{job_id[:8]}.mp4",
+        content_disposition_type="attachment" if download else "inline",
+    )
 
+
+@router.get("/video-jobs/{job_id}/preview/{kind}")
+async def video_preview(request: Request, job_id: str, kind: str):
+    job = request.app.state.jobs.get(job_id)
+    if kind not in {"avatar", "skeleton"}:
+        raise HTTPException(404, "Video preview type is not available")
+    path = request.app.state.settings.runtime_dir / "jobs" / f"{job_id}-{kind}-preview.webp"
+    if job is None or job.state != "completed" or not path.exists():
+        raise HTTPException(404, "Video preview is not available")
+    return FileResponse(path, media_type="image/webp", filename=f"{kind}-preview-{job_id[:8]}.webp", content_disposition_type="inline")

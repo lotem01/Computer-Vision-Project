@@ -9,7 +9,7 @@ import { ReadinessScreen } from './features/readiness/ReadinessScreen'
 import { ResultGallery } from './features/results/ResultGallery'
 import { UploadPanel } from './features/upload/UploadPanel'
 import { useReadiness } from './hooks/useReadiness'
-import type { PoseResult, VideoJob } from './types/domain'
+import type { DecodedVideoResult, PoseResult, VideoJob } from './types/domain'
 
 function App() {
   const { data: readiness, connected } = useReadiness()
@@ -17,23 +17,44 @@ function App() {
   const [selectedModel, setSelectedModel] = useState('')
   const [mode, setMode] = useState<'camera' | 'upload'>('camera')
   const [result, setResult] = useState<PoseResult | null>(null)
+  const [videoResult, setVideoResult] = useState<DecodedVideoResult | null>(null)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [videoJob, setVideoJob] = useState<VideoJob | null>(null)
+  const [videoJobSource, setVideoJobSource] = useState<string | null>(null)
 
   const readyModels = useMemo(() => readiness?.models.filter(model => model.state === 'ready') ?? [], [readiness])
   useEffect(() => { if (!selectedModel && readyModels[0]) setSelectedModel(readyModels[0].id) }, [readyModels, selectedModel])
   useEffect(() => {
     if (!videoJob || !['queued', 'processing'].includes(videoJob.state)) return
     const timer = setTimeout(async () => {
-      try { setVideoJob(await api.videoJob(videoJob.id)) } catch (err) { setError((err as Error).message) }
+      try {
+        const next = await api.videoJob(videoJob.id)
+        setVideoJob(next)
+        if (next.state === 'completed' && videoJobSource && (next.avatar_url || next.result_url) && next.skeleton_url) {
+          setResult(null)
+          setVideoResult({
+            jobId: next.id,
+            filename: next.filename,
+            source: videoJobSource,
+            avatar: next.avatar_url ?? next.result_url!,
+            skeleton: next.skeleton_url,
+            avatarPreview: next.avatar_preview_url,
+            skeletonPreview: next.skeleton_preview_url,
+          })
+        }
+      } catch (err) { setError((err as Error).message) }
     }, 700)
     return () => clearTimeout(timer)
-  }, [videoJob])
+  }, [videoJob, videoJobSource])
 
-  const acceptResult = (next: PoseResult) => { setResult(current => !current || (next.frameId ?? 0) >= (current.frameId ?? 0) ? next : current); setProcessing(false) }
+  const acceptResult = (next: PoseResult) => { setVideoResult(null); setResult(current => !current || (next.frameId ?? 0) >= (current.frameId ?? 0) ? next : current); setProcessing(false) }
+  const acceptVideoResult = (next: DecodedVideoResult | null) => { setResult(null); setVideoResult(next); setProcessing(false) }
   const acceptVideo = async (file: File) => {
     setProcessing(true)
+    setResult(null)
+    setVideoResult(null)
+    setVideoJobSource(URL.createObjectURL(file))
     try { setVideoJob(await api.submitVideo(file, selectedModel)) } catch (err) { setError((err as Error).message) } finally { setProcessing(false) }
   }
 
@@ -48,17 +69,16 @@ function App() {
             <ModelRail models={readiness?.models ?? []} selected={selectedModel} onSelect={setSelectedModel} />
             <section className="capture-section" id="studio">
               <div className="section-heading"><div><span className="step-number">02</span><div><h2>Feed the signal</h2><p>Move live, capture a frame, or bring your own footage.</p></div></div><div className="mode-tabs"><button className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}><Camera size={15} /> Live camera</button><button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}><ImageUp size={15} /> Upload media</button></div></div>
-              <AnimatePresence mode="wait">{mode === 'camera' ? <motion.div key="camera" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }}><CameraPanel modelId={selectedModel} onResult={acceptResult} onProcessing={setProcessing} onError={setError} onVideo={acceptVideo} /></motion.div> : <motion.div key="upload" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}><UploadPanel modelId={selectedModel} onResult={acceptResult} onProcessing={setProcessing} onError={setError} /></motion.div>}</AnimatePresence>
+              <AnimatePresence mode="wait">{mode === 'camera' ? <motion.div key="camera" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }}><CameraPanel modelId={selectedModel} onResult={acceptResult} onProcessing={setProcessing} onError={setError} onVideo={acceptVideo} /></motion.div> : <motion.div key="upload" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}><UploadPanel modelId={selectedModel} onResult={acceptResult} onVideoResult={acceptVideoResult} onProcessing={value => { if (value) { setResult(null); setVideoResult(null) }; setProcessing(value) }} onError={setError} /></motion.div>}</AnimatePresence>
             </section>
-            <ResultGallery result={result} processing={processing} />
+            <ResultGallery result={result} videoResult={videoResult} processing={processing} />
           </main>
           <footer className="site-footer"><Brand /><span>Human Pose Estimation · Project 7</span><span>Idan · Lotem · Shahaf</span></footer>
           <AnimatePresence>{error && <motion.div className="toast error-toast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CloudOff size={18} /><div><strong>Signal interrupted</strong><span>{error}</span></div><button onClick={() => setError(null)}><X size={15} /></button></motion.div>}</AnimatePresence>
-          <AnimatePresence>{videoJob && <motion.div className={`toast job-toast ${videoJob.state}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}><Film size={18} /><div><strong>{videoJob.state === 'completed' ? 'Avatar sequence ready' : 'Rendering motion'}</strong><span>{videoJob.state === 'failed' ? videoJob.error : `${Math.round(videoJob.progress)}% · ${videoJob.filename}`}</span></div>{videoJob.state === 'completed' ? <a href={videoJob.result_url!}>Open ↗</a> : <button onClick={() => setVideoJob(null)}><ChevronDown size={16} /></button>}</motion.div>}</AnimatePresence>
+          <AnimatePresence>{videoJob && <motion.div className={`toast job-toast ${videoJob.state}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}><Film size={18} /><div><strong>{videoJob.state === 'completed' ? 'Avatar sequence ready' : 'Rendering motion'}</strong><span>{videoJob.state === 'failed' ? videoJob.error : `${Math.round(videoJob.progress)}% · ${videoJob.filename}`}</span></div><button onClick={() => setVideoJob(null)}><ChevronDown size={16} /></button></motion.div>}</AnimatePresence>
         </motion.div>}
     </AnimatePresence>
   )
 }
 
 export default App
-

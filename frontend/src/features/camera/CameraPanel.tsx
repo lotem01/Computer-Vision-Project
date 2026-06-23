@@ -42,7 +42,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
       const blob = await frameBlob(); if (!blob) return scheduleFrame()
       awaitingRef.current = true; frameRef.current += 1
       const reader = new FileReader(); reader.onload = () => socket.send(JSON.stringify({ frameId: frameRef.current, modelId: modelRef.current, image: reader.result })); reader.readAsDataURL(blob)
-    }, 180)
+    }, 260)
   }, [frameBlob])
 
   useEffect(() => { if (active) scheduleFrame(); return () => clearTimeout(timerRef.current) }, [active, scheduleFrame])
@@ -57,6 +57,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
         awaitingRef.current = false
         const message = JSON.parse(event.data)
         if (message.type === 'result') onResult(message.data)
+        if (message.type === 'error') onError(message.message ?? 'Live frame could not be decoded.')
         scheduleFrame()
       }
       socket.onerror = () => { awaitingRef.current = false; onError('Live connection was interrupted.') }
@@ -91,7 +92,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
   return (
     <div className="input-panel camera-panel">
       <div className={`camera-stage ${active ? 'active' : ''}`}>
-        <video ref={videoRef} muted playsInline /> <canvas ref={canvasRef} hidden />
+        <video ref={videoRef} muted playsInline autoPlay /> <canvas ref={canvasRef} hidden />
         {!active && <div className="camera-empty"><div className="camera-lens"><Video size={28} /></div><span>LIVE MOTION CAPTURE</span><h3>Bring your pose to life</h3><p>Your camera stays on this computer. Frames are processed by the local engine.</p><button className="primary-button" onClick={start}><Video size={15} /> Enable camera</button></div>}
         {active && <><div className="camera-corners"><i /><i /><i /><i /></div><span className="live-badge"><Radio size={12} /> LIVE</span><span className="fps-badge">ADAPTIVE · LOCAL</span></>}
       </div>

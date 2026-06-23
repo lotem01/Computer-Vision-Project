@@ -48,9 +48,11 @@ class UltralyticsPoseAdapter:
             raise RuntimeError("Model is not ready")
         with self._lock:
             result = self._model.predict(image, verbose=False, conf=0.25, device="cpu")[0]
-        if result.keypoints is None or len(result.keypoints) == 0:
+        if result.keypoints is None or len(result.keypoints) == 0 or result.boxes is None:
             return None
         boxes = result.boxes.conf.cpu().numpy()
+        if boxes.size == 0:
+            return None
         best = int(boxes.argmax())
         xy = result.keypoints.xy[best].cpu().numpy()
         conf_tensor = result.keypoints.conf
@@ -65,4 +67,3 @@ class UltralyticsPoseAdapter:
             width=width,
             height=height,
         )
-

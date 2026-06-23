@@ -6,6 +6,22 @@ PoseLab is a local, presentation-ready pose-to-avatar studio. It preloads four U
 
 Requirements: Node.js 20+, npm, and Python 3.9+ (the setup script prefers the installed Python 3.9 runtime for PyTorch compatibility).
 
+For the presentation, double-click:
+
+```powershell
+.\RUN_APP.cmd
+```
+
+It will reuse the prepared environment, build the UI only if needed, open the browser, and start the local backend.
+
+To shut the local app down after presenting, double-click:
+
+```powershell
+.\STOP_APP.cmd
+```
+
+For manual setup:
+
 ```powershell
 .\setup.ps1
 .\start.ps1
