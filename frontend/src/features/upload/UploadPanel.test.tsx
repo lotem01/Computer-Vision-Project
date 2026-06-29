@@ -45,17 +45,19 @@ describe('UploadPanel', () => {
       skeleton_url: '/api/v1/video-jobs/job-1/result/skeleton',
       avatar_preview_url: '/api/v1/video-jobs/job-1/preview/avatar',
       skeleton_preview_url: '/api/v1/video-jobs/job-1/preview/skeleton',
+      avatar_preview_kind: 'image',
+      skeleton_preview_kind: 'image',
     })
     const onProcessing = vi.fn()
     const onVideoResult = vi.fn()
-    const { container } = render(<UploadPanel modelId="yolov8n_pose" onResult={vi.fn()} onVideoResult={onVideoResult} onProcessing={onProcessing} onError={vi.fn()} />)
+    const { container } = render(<UploadPanel modelId="yolov8n_pose" offlineFps={9} onResult={vi.fn()} onVideoResult={onVideoResult} onProcessing={onProcessing} onError={vi.fn()} />)
 
     const input = container.querySelector('input[type="file"]') as HTMLInputElement
     const file = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
     fireEvent.change(input, { target: { files: [file] } })
     fireEvent.click(screen.getByRole('button', { name: /render avatar video/i }))
 
-    await waitFor(() => expect(apiMock.submitVideo).toHaveBeenCalledWith(file, 'yolov8n_pose'))
+    await waitFor(() => expect(apiMock.submitVideo).toHaveBeenCalledWith(file, 'yolov8n_pose', 9))
 
     expect(await screen.findByText('Video ready in Motion decoded')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /preview/i })).not.toBeInTheDocument()
@@ -70,7 +72,10 @@ describe('UploadPanel', () => {
       skeleton: '/api/v1/video-jobs/job-1/result/skeleton',
       avatarPreview: '/api/v1/video-jobs/job-1/preview/avatar',
       skeletonPreview: '/api/v1/video-jobs/job-1/preview/skeleton',
+      avatarPreviewKind: 'image',
+      skeletonPreviewKind: 'image',
     })
     expect(onProcessing).toHaveBeenCalledWith(false)
   })
+
 })

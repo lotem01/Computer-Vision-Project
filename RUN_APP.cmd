@@ -19,19 +19,17 @@ if not exist ".venv\Scripts\python.exe" (
   )
 )
 
-if not exist "frontend\dist\index.html" (
-  echo Building the presentation UI...
-  pushd frontend
-  call npm run build
-  if errorlevel 1 (
-    popd
-    echo.
-    echo Frontend build failed. Keep this window open and read the error above.
-    pause
-    exit /b 1
-  )
+echo Building the presentation UI...
+pushd frontend
+call npm run build
+if errorlevel 1 (
   popd
+  echo.
+  echo Frontend build failed. Keep this window open and read the error above.
+  pause
+  exit /b 1
 )
+popd
 
 echo Starting local app at http://127.0.0.1:8000
 start "" "http://127.0.0.1:8000"

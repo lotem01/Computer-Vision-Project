@@ -26,8 +26,14 @@ if ($Items.Count -eq 0) {
   Write-Host "Runtime cleanup dry run: would remove $($Items.Count) generated artifact(s)."
   $Items | ForEach-Object { Write-Host "  $($_.FullName)" }
 } else {
-  $Items | Remove-Item -Force -Recurse
-  Write-Host "Runtime cleanup: removed $($Items.Count) generated artifact(s)."
+  $Removed = 0
+  foreach ($Item in $Items) {
+    if (Test-Path -LiteralPath $Item.FullName) {
+      Remove-Item -LiteralPath $Item.FullName -Force -Recurse -ErrorAction SilentlyContinue
+      $Removed += 1
+    }
+  }
+  Write-Host "Runtime cleanup: removed $Removed generated artifact(s)."
 }
 
 $Gitkeep = Join-Path $ResolvedJobs '.gitkeep'

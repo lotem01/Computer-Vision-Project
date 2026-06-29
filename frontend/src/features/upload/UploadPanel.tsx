@@ -6,20 +6,20 @@ import type { DecodedVideoResult, PoseResult, VideoJob } from '../../types/domai
 
 interface Props {
   modelId: string
+  offlineFps: number
   onResult: (result: PoseResult) => void
   onVideoResult: (result: DecodedVideoResult | null) => void
   onProcessing: (value: boolean) => void
   onError: (message: string) => void
 }
 
-export function UploadPanel({ modelId, onResult, onVideoResult, onProcessing, onError }: Props) {
+export function UploadPanel({ modelId, offlineFps, onResult, onVideoResult, onProcessing, onError }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [job, setJob] = useState<VideoJob | null>(null)
 
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
   useEffect(() => {
     if (!job || !['queued', 'processing'].includes(job.state)) return
     const timer = window.setTimeout(async () => {
@@ -36,6 +36,8 @@ export function UploadPanel({ modelId, onResult, onVideoResult, onProcessing, on
             skeleton: next.skeleton_url,
             avatarPreview: next.avatar_preview_url,
             skeletonPreview: next.skeleton_preview_url,
+            avatarPreviewKind: next.avatar_preview_kind,
+            skeletonPreviewKind: next.skeleton_preview_kind,
           })
         }
         if (next.error) onError(next.error)
@@ -61,7 +63,7 @@ export function UploadPanel({ modelId, onResult, onVideoResult, onProcessing, on
     onProcessing(true)
     try {
       if (file.type.startsWith('video/')) {
-        const created = await api.submitVideo(file, modelId)
+        const created = await api.submitVideo(file, modelId, offlineFps)
         setJob(created)
       } else {
         onResult(await api.inferImage(file, modelId))
@@ -149,7 +151,7 @@ export function UploadPanel({ modelId, onResult, onVideoResult, onProcessing, on
           </div>
           {job && (
             <div className="job-progress">
-              <div><span>{job.state === 'completed' ? 'Video ready in Motion decoded' : 'Rendering avatar sequence'}</span><strong>{Math.round(job.progress)}%</strong></div>
+              <div><span>{job.state === 'completed' ? 'Video ready in Motion decoded' : `Rendering avatar sequence · ${offlineFps} FPS`}</span><strong>{Math.round(job.progress)}%</strong></div>
               <div className="progress-track"><motion.div animate={{ width: `${job.progress}%` }} /></div>
               {job.state === 'completed' && (
                 <div className="video-downloads">
@@ -161,7 +163,7 @@ export function UploadPanel({ modelId, onResult, onVideoResult, onProcessing, on
           )}
         </div>
       )}
-      <button className="analyze-button" disabled={!file || !!job && ['queued', 'processing'].includes(job.state)} onClick={analyze}><span>{isVideo ? 'Render avatar video' : 'Decode pose'}</span><i>↗</i></button>
+      <button className="analyze-button" disabled={!file || !!job && ['queued', 'processing'].includes(job.state)} onClick={analyze}><span>{isVideo ? `Render avatar video · ${offlineFps} FPS` : 'Decode pose'}</span><i>↗</i></button>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Download, Expand, Film, Gauge, Maximize2, Pause, Play, RotateCcw, ScanLine, TimerReset, X } from 'lucide-react'
+import { Download, Expand, Film, Gauge, Maximize2, ScanLine, TimerReset, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useRef, useState } from 'react'
 import type { DecodedVideoResult, PoseResult } from '../../types/domain'
@@ -9,84 +9,109 @@ const views = [
   { key: 'avatar', videoKey: 'avatar', label: 'Avatar', tag: 'OUTPUT' },
 ] as const
 
-type ViewKey = (typeof views)[number]['key']
+type View = (typeof views)[number]
+type ViewKey = View['key']
 type Props = {
   result: PoseResult | null
   videoResult: DecodedVideoResult | null
   processing: boolean
 }
 type DisplayMedia = { url: string; kind: 'image' | 'video'; downloadUrl: string }
+type VideoRefs = Partial<Record<ViewKey, HTMLVideoElement | null>>
 
-function ControlledPreview({ media, label, onExpand }: { media: DisplayMedia; label: string; onExpand: () => void }) {
-  const frameRef = useRef<HTMLDivElement>(null)
-  const imageRef = useRef<HTMLImageElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [paused, setPaused] = useState(false)
-  const [version, setVersion] = useState(0)
-  const isAnimatedPreview = media.kind === 'image' && media.url.includes('/preview/')
-  const previewUrl = isAnimatedPreview ? `${media.url}${media.url.includes('?') ? '&' : '?'}v=${version}` : media.url
+function ResultMedia({
+  media,
+  view,
+  hasVideo,
+  registerVideo,
+  onSourceSync,
+  onExpand,
+}: {
+  media: DisplayMedia
+  view: View
+  hasVideo: boolean
+  registerVideo: (key: ViewKey, node: HTMLVideoElement | null) => void
+  onSourceSync: () => void
+  onExpand: () => void
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isSource = hasVideo && view.videoKey === 'source'
+  const isSyncedOutput = hasVideo && view.videoKey !== 'source' && media.kind === 'video'
 
-  const pausePreview = () => {
-    const image = imageRef.current
-    const canvas = canvasRef.current
-    if (!image || !canvas) return
-    canvas.width = image.naturalWidth || image.clientWidth
-    canvas.height = image.naturalHeight || image.clientHeight
-    canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
-    setPaused(true)
-  }
-
-  const playPreview = () => setPaused(false)
-  const restartPreview = () => { setPaused(false); setVersion(current => current + 1) }
-  const fullscreen = () => frameRef.current?.requestFullscreen?.()
+  const fullscreen = () => containerRef.current?.requestFullscreen?.()
 
   if (media.kind === 'video') {
     return (
-      <div className="controlled-preview" ref={frameRef}>
-        <video src={media.url} controls playsInline muted preload="metadata" />
-        <button className="expand-button" onClick={onExpand} aria-label={`Expand ${label}`}><Expand size={15} /></button>
+      <div className="controlled-preview" ref={containerRef}>
+        <video
+          ref={node => registerVideo(view.key, node)}
+          src={media.url}
+          controls={isSource}
+          playsInline
+          muted
+          preload="metadata"
+          onPlay={isSource ? onSourceSync : undefined}
+          onPause={isSource ? onSourceSync : undefined}
+          onSeeked={isSource ? onSourceSync : undefined}
+          onTimeUpdate={isSource ? onSourceSync : undefined}
+          onRateChange={isSource ? onSourceSync : undefined}
+          onLoadedMetadata={isSyncedOutput ? onSourceSync : undefined}
+        />
+        {isSyncedOutput && (
+          <div className="preview-controls always-visible">
+            <button type="button" onClick={fullscreen} aria-label={`Fullscreen ${view.label}`}><Maximize2 size={13} /></button>
+          </div>
+        )}
       </div>
     )
   }
 
   return (
-    <div className="controlled-preview" ref={frameRef}>
-      <img ref={imageRef} src={previewUrl} alt={`${label} result`} className={paused ? 'is-paused' : ''} />
-      <canvas ref={canvasRef} className={`preview-freeze ${paused ? 'visible' : ''}`} aria-hidden="true" />
-      {isAnimatedPreview && (
-        <div className="preview-controls" aria-label={`${label} playback controls`}>
-          <button type="button" onClick={paused ? playPreview : pausePreview} aria-label={`${paused ? 'Play' : 'Pause'} ${label}`}>
-            {paused ? <Play size={13} /> : <Pause size={13} />}
-          </button>
-          <button type="button" onClick={restartPreview} aria-label={`Restart ${label}`}><RotateCcw size={13} /></button>
-          <button type="button" onClick={fullscreen} aria-label={`Fullscreen ${label}`}><Maximize2 size={13} /></button>
-          <button type="button" onClick={onExpand} aria-label={`Expand ${label}`}><Expand size={13} /></button>
-        </div>
-      )}
-      {!isAnimatedPreview && <button className="expand-button" onClick={onExpand} aria-label={`Expand ${label}`}><Expand size={15} /></button>}
+    <div className="controlled-preview" ref={containerRef}>
+      <img src={media.url} alt={`${view.label} result`} />
+      <button className="expand-button" onClick={onExpand} aria-label={`Expand ${view.label}`}><Expand size={15} /></button>
     </div>
   )
 }
 
 export function ResultGallery({ result, videoResult, processing }: Props) {
   const [expanded, setExpanded] = useState<ViewKey | null>(null)
+  const videoRefs = useRef<VideoRefs>({})
   const hasVideo = Boolean(videoResult && !result)
 
-  const mediaFor = (view: (typeof views)[number]): DisplayMedia | null => {
+  const registerVideo = (key: ViewKey, node: HTMLVideoElement | null) => {
+    videoRefs.current[key] = node
+  }
+
+  const syncFromSource = () => {
+    const source = videoRefs.current.original
+    if (!source || !hasVideo) return
+    for (const key of ['skeleton', 'avatar'] as const) {
+      const target = videoRefs.current[key]
+      if (!target || target.readyState < 1) continue
+      target.playbackRate = source.playbackRate
+      if (Number.isFinite(source.currentTime) && Math.abs(target.currentTime - source.currentTime) > 0.18) {
+        target.currentTime = Math.min(source.currentTime, target.duration || source.currentTime)
+      }
+      if (source.paused) {
+        target.pause()
+      } else {
+        void target.play().catch(() => undefined)
+      }
+    }
+  }
+
+  const mediaFor = (view: View): DisplayMedia | null => {
     if (result) return { url: result[view.key], kind: 'image', downloadUrl: result[view.key] }
     if (videoResult) {
-      if (view.videoKey === 'avatar') {
-        return { url: videoResult.avatarPreview ?? videoResult.avatar, kind: videoResult.avatarPreview ? 'image' : 'video', downloadUrl: videoResult.avatar }
-      }
-      if (view.videoKey === 'skeleton') {
-        return { url: videoResult.skeletonPreview ?? videoResult.skeleton, kind: videoResult.skeletonPreview ? 'image' : 'video', downloadUrl: videoResult.skeleton }
-      }
+      if (view.videoKey === 'avatar') return { url: videoResult.avatarPreview ?? videoResult.avatar, kind: videoResult.avatarPreviewKind === 'image' ? 'image' : 'video', downloadUrl: videoResult.avatar }
+      if (view.videoKey === 'skeleton') return { url: videoResult.skeletonPreview ?? videoResult.skeleton, kind: videoResult.skeletonPreviewKind === 'image' ? 'image' : 'video', downloadUrl: videoResult.skeleton }
       return { url: videoResult.source, kind: 'video', downloadUrl: videoResult.source }
     }
     return null
   }
 
-  const downloadFor = (view: (typeof views)[number], media: DisplayMedia) => {
+  const downloadFor = (view: View, media: DisplayMedia) => {
     if (!hasVideo) return { href: media.downloadUrl, label: 'Export', filename: `poselab-${view.key}.jpg` }
     if (view.videoKey === 'source') return { href: media.downloadUrl, label: 'Source', filename: videoResult?.filename ?? 'source-video.mp4' }
     return { href: `${media.downloadUrl}?download=1`, label: view.videoKey === 'avatar' ? 'Avatar MP4' : 'Pose map MP4', filename: `poselab-${view.videoKey}.mp4` }
@@ -100,7 +125,7 @@ export function ResultGallery({ result, videoResult, processing }: Props) {
       <div className="section-heading">
         <div><span className="step-number">03</span><div><h2 id="result-heading">Motion decoded</h2><p>Source, structure, and expression — synchronized.</p></div></div>
         {result && <div className="result-metrics"><span><TimerReset size={14} /> {Math.round(result.timing.total_ms)} ms</span><span><ScanLine size={14} /> {result.detectedJoints}/{result.model.joint_count}</span><span><Gauge size={14} /> {Math.round((result.personBox?.confidence ?? 0) * 100)}%</span></div>}
-        {hasVideo && <div className="result-metrics"><span><Film size={14} /> VIDEO JOB</span><span><ScanLine size={14} /> POSE MAP</span><span><Gauge size={14} /> READY</span></div>}
+        {hasVideo && <div className="result-metrics"><span><Film size={14} /> VIDEO JOB</span><span><ScanLine size={14} /> SYNCED</span><span><Gauge size={14} /> READY</span></div>}
       </div>
       <div className="result-grid">
         {views.map((view, index) => {
@@ -111,7 +136,7 @@ export function ResultGallery({ result, videoResult, processing }: Props) {
               <header><span><i>0{index + 1}</i>{view.label}</span><small>{view.tag}</small></header>
               <div className="result-frame">
                 {media ? (
-                  <ControlledPreview media={media} label={view.label} onExpand={() => setExpanded(view.key)} />
+                  <ResultMedia media={media} view={view} hasVideo={hasVideo} registerVideo={registerVideo} onSourceSync={syncFromSource} onExpand={() => setExpanded(view.key)} />
                 ) : (
                   <div className={`empty-visual empty-${index}`}><span className="empty-scan" /><div>{processing ? 'PROCESSING SIGNAL' : index === 0 ? 'AWAITING INPUT' : 'NO SIGNAL'}</div></div>
                 )}

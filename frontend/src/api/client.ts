@@ -26,9 +26,10 @@ export const api = {
     return json<PoseResult>(await fetch(`${API}/infer/${diffusion ? 'diffusion' : 'image'}`, { method: 'POST', body: form }))
   },
 
-  async submitVideo(file: File, modelId: string) {
+  async submitVideo(file: File, modelId: string, renderFps?: number) {
     const form = new FormData()
     form.append('modelId', modelId)
+    if (renderFps) form.append('renderFps', String(renderFps))
     form.append('video', file)
     return json<VideoJob>(await fetch(`${API}/video-jobs`, { method: 'POST', body: form }))
   },
@@ -46,4 +47,3 @@ export const api = {
     return new WebSocket(`${protocol}//${location.host}${API}/live`)
   },
 }
-

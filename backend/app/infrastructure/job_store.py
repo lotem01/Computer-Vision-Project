@@ -17,6 +17,8 @@ class VideoJob:
     skeleton_url: str | None = None
     avatar_preview_url: str | None = None
     skeleton_preview_url: str | None = None
+    avatar_preview_kind: str | None = None
+    skeleton_preview_kind: str | None = None
     error: str | None = None
     cancelled: bool = False
 

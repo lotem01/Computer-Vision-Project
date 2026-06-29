@@ -53,6 +53,8 @@ export interface VideoJob {
   skeleton_url?: string | null
   avatar_preview_url?: string | null
   skeleton_preview_url?: string | null
+  avatar_preview_kind?: 'image' | 'video' | null
+  skeleton_preview_kind?: 'image' | 'video' | null
   error?: string | null
 }
 
@@ -64,4 +66,6 @@ export interface DecodedVideoResult {
   skeleton: string
   avatarPreview?: string | null
   skeletonPreview?: string | null
+  avatarPreviewKind?: 'image' | 'video' | null
+  skeletonPreviewKind?: 'image' | 'video' | null
 }

@@ -5,13 +5,15 @@ import type { PoseResult } from '../../types/domain'
 
 interface Props {
   modelId: string
+  liveFps: number
+  offlineFps: number
   onResult: (result: PoseResult) => void
   onProcessing: (value: boolean) => void
   onError: (message: string) => void
   onVideo: (file: File) => void
 }
 
-export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo }: Props) {
+export function CameraPanel({ modelId, liveFps, offlineFps, onResult, onProcessing, onError, onVideo }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const socketRef = useRef<WebSocket | null>(null)
@@ -22,9 +24,11 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
   const awaitingRef = useRef(false)
   const activeRef = useRef(false)
   const modelRef = useRef(modelId)
+  const liveFpsRef = useRef(liveFps)
   const [active, setActive] = useState(false)
   const [recording, setRecording] = useState(false)
   modelRef.current = modelId
+  liveFpsRef.current = liveFps
 
   const frameBlob = useCallback(() => new Promise<Blob | null>(resolve => {
     const video = videoRef.current; const canvas = canvasRef.current
@@ -42,7 +46,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
       const blob = await frameBlob(); if (!blob) return scheduleFrame()
       awaitingRef.current = true; frameRef.current += 1
       const reader = new FileReader(); reader.onload = () => socket.send(JSON.stringify({ frameId: frameRef.current, modelId: modelRef.current, image: reader.result })); reader.readAsDataURL(blob)
-    }, 260)
+    }, Math.max(125, Math.round(1000 / liveFpsRef.current)))
   }, [frameBlob])
 
   useEffect(() => { if (active) scheduleFrame(); return () => clearTimeout(timerRef.current) }, [active, scheduleFrame])
@@ -81,6 +85,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
   const toggleRecord = () => {
     if (!recording) {
       const stream = videoRef.current?.srcObject as MediaStream
+      if (!stream) return onError('Start the camera before recording motion.')
       chunksRef.current = []
       const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm' })
       recorder.ondataavailable = event => event.data.size && chunksRef.current.push(event.data)
@@ -94,7 +99,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
       <div className={`camera-stage ${active ? 'active' : ''}`}>
         <video ref={videoRef} muted playsInline autoPlay /> <canvas ref={canvasRef} hidden />
         {!active && <div className="camera-empty"><div className="camera-lens"><Video size={28} /></div><span>LIVE MOTION CAPTURE</span><h3>Bring your pose to life</h3><p>Your camera stays on this computer. Frames are processed by the local engine.</p><button className="primary-button" onClick={start}><Video size={15} /> Enable camera</button></div>}
-        {active && <><div className="camera-corners"><i /><i /><i /><i /></div><span className="live-badge"><Radio size={12} /> LIVE</span><span className="fps-badge">ADAPTIVE · LOCAL</span></>}
+        {active && <><div className="camera-corners"><i /><i /><i /><i /></div><span className="live-badge"><Radio size={12} /> LIVE</span><span className="fps-badge">{liveFps} FPS · LOCAL</span></>}
       </div>
       <div className="camera-controls">
         <button disabled={!active} onClick={capture}><Camera size={17} /><span>Capture still</span></button>
@@ -102,6 +107,7 @@ export function CameraPanel({ modelId, onResult, onProcessing, onError, onVideo 
         <button disabled={!active} onClick={stop}><VideoOff size={17} /><span>End camera</span></button>
         <button disabled={!active} onClick={() => { stop(); setTimeout(start, 100) }} aria-label="Restart camera"><RefreshCw size={17} /></button>
       </div>
+      <p className="recording-hint">Recorded clips render at {offlineFps} FPS and open automatically in the Source / Pose map / Avatar previews when processing finishes.</p>
     </div>
   )
 }

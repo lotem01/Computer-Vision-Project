@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 from pathlib import Path
 
 import cv2
@@ -20,14 +19,14 @@ class VideoService:
         self.job_dir = settings.runtime_dir / "jobs"
         self.job_dir.mkdir(parents=True, exist_ok=True)
 
-    async def submit(self, filename: str, model_id: str, payload: bytes) -> VideoJob:
+    async def submit(self, filename: str, model_id: str, payload: bytes, render_fps: float | None = None) -> VideoJob:
         job = self.jobs.create(filename, model_id)
         source = self.job_dir / f"{job.id}-source{Path(filename).suffix or '.mp4'}"
         source.write_bytes(payload)
-        asyncio.create_task(asyncio.to_thread(self._process, job.id, source))
+        asyncio.create_task(asyncio.to_thread(self._process, job.id, source, render_fps))
         return job
 
-    def _process(self, job_id: str, source: Path) -> None:
+    def _process(self, job_id: str, source: Path, render_fps: float | None = None) -> None:
         avatar_output = self.job_dir / f"{job_id}-avatar.mp4"
         skeleton_output = self.job_dir / f"{job_id}-skeleton.mp4"
         avatar_preview = self.job_dir / f"{job_id}-avatar-preview.webp"
@@ -41,8 +40,9 @@ class VideoService:
             source_fps = capture.get(cv2.CAP_PROP_FPS) or 24
             total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
             max_source_frames = int(min(total or source_fps * self.settings.maximum_video_seconds, source_fps * self.settings.maximum_video_seconds))
-            step = max(1, round(source_fps / self.settings.maximum_video_fps))
-            output_fps = min(source_fps, self.settings.maximum_video_fps)
+            target_fps = max(1.0, min(float(render_fps or self.settings.maximum_video_fps), float(self.settings.maximum_video_fps)))
+            step = max(1, round(source_fps / target_fps))
+            output_fps = min(source_fps, target_fps)
             preview_fps = min(8, max(1, output_fps))
             preview_step = max(1, round(output_fps / preview_fps))
             preview_duration_ms = max(1, round(1000 / preview_fps))
@@ -55,9 +55,7 @@ class VideoService:
                 if kind in writers:
                     return writers[kind]
                 height, width = frame.shape[:2]
-                writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"avc1"), output_fps, (width, height))
-                if not writer.isOpened():
-                    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), output_fps, (width, height))
+                writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), output_fps, (width, height))
                 if not writer.isOpened():
                     raise ValueError(f"Could not open the {kind} video writer.")
                 writers[kind] = writer
@@ -134,6 +132,8 @@ class VideoService:
                 skeleton_url=skeleton_url,
                 avatar_preview_url=avatar_preview_url,
                 skeleton_preview_url=skeleton_preview_url,
+                avatar_preview_kind="image" if avatar_preview_url else None,
+                skeleton_preview_kind="image" if skeleton_preview_url else None,
             )
         except Exception as exc:
             self.jobs.update(job_id, state="failed", error=f"{type(exc).__name__}: {exc}")

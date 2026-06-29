@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -99,6 +100,7 @@ async def live(websocket: WebSocket):
 async def create_video_job(
     request: Request,
     model_id: str = Form(..., alias="modelId"),
+    render_fps: Optional[float] = Form(None, alias="renderFps"),
     video: UploadFile = File(...),
 ):
     payload = await video.read()
@@ -106,7 +108,7 @@ async def create_video_job(
         raise HTTPException(413, "The video is larger than the configured upload limit.")
     try:
         request.app.state.registry.require(model_id)
-        job = await request.app.state.video.submit(video.filename or "upload.mp4", model_id, payload)
+        job = await request.app.state.video.submit(video.filename or "upload.mp4", model_id, payload, render_fps)
         return job.public()
     except Exception as exc:
         raise _error(exc) from exc

@@ -22,6 +22,8 @@ def test_video_job_public_contract_exposes_rendered_outputs():
         skeleton_url=f"/api/v1/video-jobs/{job.id}/result/skeleton",
         avatar_preview_url=f"/api/v1/video-jobs/{job.id}/preview/avatar",
         skeleton_preview_url=f"/api/v1/video-jobs/{job.id}/preview/skeleton",
+        avatar_preview_kind="image",
+        skeleton_preview_kind="image",
     )
 
     public = store.get(job.id).public()
@@ -32,4 +34,6 @@ def test_video_job_public_contract_exposes_rendered_outputs():
     assert public["skeleton_url"].endswith("/result/skeleton")
     assert public["avatar_preview_url"].endswith("/preview/avatar")
     assert public["skeleton_preview_url"].endswith("/preview/skeleton")
+    assert public["avatar_preview_kind"] == "image"
+    assert public["skeleton_preview_kind"] == "image"
     assert "cancelled" not in public
