@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from app.services.inference import InferenceService, NoPersonDetectedError
@@ -160,3 +160,66 @@ async def video_preview(request: Request, job_id: str, kind: str):
     if job is None or job.state != "completed" or not path.exists():
         raise HTTPException(404, "Video preview is not available")
     return FileResponse(path, media_type="image/webp", filename=f"{kind}-preview-{job_id[:8]}.webp", content_disposition_type="inline")
+
+
+@router.get("/exercise/instructors")
+async def exercise_instructors(request: Request):
+    return {"apiVersion": "v1", "items": [item.model_dump(mode="json", by_alias=True) for item in request.app.state.exercise.list_instructors()]}
+
+
+@router.post("/exercise/instructors", status_code=202)
+async def create_exercise_instructor(
+    request: Request,
+    model_id: str = Form(..., alias="modelId"),
+    render_fps: Optional[float] = Form(None, alias="renderFps"),
+    video: UploadFile = File(...),
+):
+    payload = await video.read()
+    if len(payload) > request.app.state.settings.maximum_upload_mb * 1024 * 1024:
+        raise HTTPException(413, "The video is larger than the configured upload limit.")
+    try:
+        request.app.state.registry.require(model_id)
+        job = await request.app.state.exercise.submit(video.filename or "exercise-video.mp4", model_id, payload, render_fps)
+        return job.model_dump(mode="json", by_alias=True)
+    except Exception as exc:
+        raise _error(exc) from exc
+
+
+@router.get("/exercise/instructors/{instructor_id}")
+async def exercise_instructor(request: Request, instructor_id: str):
+    instructor = request.app.state.exercise.get(instructor_id)
+    if instructor is None:
+        raise HTTPException(404, "Exercise instructor was not found")
+    return instructor.model_dump(mode="json", by_alias=True)
+
+
+@router.get("/exercise/instructors/{instructor_id}/frames/{frame_index}/skeleton")
+async def exercise_instructor_skeleton(request: Request, instructor_id: str, frame_index: int):
+    instructor = request.app.state.exercise.get(instructor_id)
+    if instructor is None or instructor.state != "completed":
+        raise HTTPException(404, "Exercise instructor is not ready")
+    path = request.app.state.exercise.frame_path(instructor_id, frame_index)
+    if path is None or not path.exists():
+        raise HTTPException(404, "Instructor skeleton frame is not available")
+    return FileResponse(path, media_type="image/webp", filename=f"exercise-{instructor_id[:8]}-{frame_index:04d}.webp", content_disposition_type="inline")
+
+
+@router.post("/exercise/compare")
+async def exercise_compare(
+    request: Request,
+    instructor_id: str = Form(..., alias="instructorId"),
+    frame_index: int = Form(..., alias="frameIndex"),
+    model_id: str = Form(..., alias="modelId"),
+    image: UploadFile = File(...),
+):
+    try:
+        decoded = request.app.state.media.decode_image(await image.read())
+        result = request.app.state.exercise.compare(instructor_id, frame_index, decoded, model_id)
+        return result.model_dump(mode="json", by_alias=True)
+    except Exception as exc:
+        raise _error(exc) from exc
+
+
+@router.post("/exercise/summary")
+async def exercise_summary(request: Request, samples: list[dict] = Body(...)):
+    return request.app.state.exercise.summarize(samples).model_dump(mode="json", by_alias=True)

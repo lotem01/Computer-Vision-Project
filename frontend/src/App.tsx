@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Camera, ChevronDown, CircleHelp, CloudOff, Film, ImageUp, Menu, Settings2, X } from 'lucide-react'
+import { Camera, ChevronDown, CircleHelp, CloudOff, Dumbbell, Film, ImageUp, Menu, Settings2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
 import { Brand } from './components/Brand'
 import { SessionLibrary } from './components/SessionLibrary'
 import { CameraPanel } from './features/camera/CameraPanel'
+import { ExerciseMode } from './features/exercise/ExerciseMode'
 import { ModelRail } from './features/models/ModelRail'
 import { ReadinessScreen } from './features/readiness/ReadinessScreen'
 import { ResultGallery } from './features/results/ResultGallery'
@@ -17,6 +18,7 @@ function App() {
   const [entered, setEntered] = useState(false)
   const [selectedModel, setSelectedModel] = useState('')
   const [mode, setMode] = useState<'camera' | 'upload'>('camera')
+  const [windowMode, setWindowMode] = useState<'studio' | 'exercise'>('studio')
   const [result, setResult] = useState<PoseResult | null>(null)
   const [videoResult, setVideoResult] = useState<DecodedVideoResult | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -76,10 +78,15 @@ function App() {
       {!entered ? <ReadinessScreen key="readiness" data={readiness} connected={connected} onEnter={() => readiness?.completed && setEntered(true)} /> :
         <motion.div className="app-shell" key="studio" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-          <header className="topbar"><Brand /><nav><a href="#studio" className="active">Studio</a><a href="#models">Models</a><a href="#about">About</a></nav><div className="top-actions"><span className="local-chip"><i /> LOCAL ENGINE</span><button aria-label="Help"><CircleHelp size={18} /></button><button aria-label="Settings"><Settings2 size={18} /></button><button className="menu-button" aria-label="Menu"><Menu size={18} /></button></div></header>
+          <header className="topbar"><Brand /><nav><button className={windowMode === 'studio' ? 'active' : ''} onClick={() => setWindowMode('studio')}>Pose Studio</button><button className={windowMode === 'exercise' ? 'active' : ''} onClick={() => setWindowMode('exercise')}>Exercise Mode</button><a href="#models">Models</a></nav><div className="top-actions"><span className="local-chip"><i /> LOCAL ENGINE</span><button aria-label="Help"><CircleHelp size={18} /></button><button aria-label="Settings"><Settings2 size={18} /></button><button className="menu-button" aria-label="Menu"><Menu size={18} /></button></div></header>
           <main>
             <section className="hero"><div><span className="eyebrow"><span className="live-dot" /> HUMAN MOTION · MACHINE INTELLIGENCE</span><h1>Turn movement into<br /><em>something extraordinary.</em></h1><p>Four pose engines. One expressive canvas. Capture a human moment and watch intelligence reconstruct it in real time.</p></div><aside><span>SESSION</span><strong>01</strong><small>ALL SYSTEMS<br />OPERATIONAL</small></aside></section>
             <ModelRail models={readiness?.models ?? []} selected={selectedModel} onSelect={setSelectedModel} />
+            <div className="window-switch" aria-label="Application mode">
+              <button className={windowMode === 'studio' ? 'active' : ''} onClick={() => setWindowMode('studio')}><Camera size={16} /> Pose Studio</button>
+              <button className={windowMode === 'exercise' ? 'active' : ''} onClick={() => setWindowMode('exercise')}><Dumbbell size={16} /> Exercise Mode</button>
+            </div>
+            {windowMode === 'studio' ? <>
             <section className="capture-section" id="studio">
               <div className="section-heading"><div><span className="step-number">02</span><div><h2>Feed the signal</h2><p>Move live, capture a frame, or bring your own footage.</p></div></div><div className="mode-tabs"><button className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}><Camera size={15} /> Live camera</button><button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}><ImageUp size={15} /> Upload media</button></div></div>
               <div className="render-controls prominent-controls" aria-label="Frame rendering frequency controls">
@@ -90,6 +97,7 @@ function App() {
               <AnimatePresence mode="wait">{mode === 'camera' ? <motion.div key="camera" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }}><CameraPanel modelId={selectedModel} liveFps={liveFps} offlineFps={offlineFps} onResult={acceptResult} onProcessing={setProcessing} onError={setError} onVideo={acceptVideo} /></motion.div> : <motion.div key="upload" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}><UploadPanel modelId={selectedModel} offlineFps={offlineFps} onResult={acceptResult} onVideoResult={acceptVideoResult} onProcessing={value => { if (value) { setResult(null); setVideoResult(null) }; setProcessing(value) }} onError={setError} /></motion.div>}</AnimatePresence>
             </section>
             <ResultGallery result={result} videoResult={videoResult} processing={processing} />
+            </> : <ExerciseMode modelId={selectedModel} liveFps={liveFps} offlineFps={offlineFps} onError={setError} />}
           </main>
           <footer className="site-footer"><Brand /><span>Human Pose Estimation · Project 7</span><span>Idan · Lotem · Shahaf</span></footer>
           <AnimatePresence>{error && <motion.div className="toast error-toast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CloudOff size={18} /><div><strong>Signal interrupted</strong><span>{error}</span></div><button onClick={() => setError(null)}><X size={15} /></button></motion.div>}</AnimatePresence>

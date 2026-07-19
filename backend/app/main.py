@@ -15,6 +15,7 @@ from app.media.opencv_processor import OpenCVMediaProcessor
 from app.models.registry import ModelRegistry
 from app.renderers.diffusion import DiffusionAvatarRenderer
 from app.services.inference import InferenceService
+from app.services.exercise import ExerciseService
 from app.services.video import VideoService
 
 
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
     app.state.inference = inference
     app.state.jobs = jobs
     app.state.video = VideoService(inference, jobs, settings)
+    app.state.exercise = ExerciseService(inference, settings)
     app.state.diffusion = DiffusionAvatarRenderer(settings.enable_diffusion)
 
     async def run_service(service, image, model_id, frame_id=None):
@@ -69,4 +71,3 @@ async def health():
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if frontend_dist.exists():
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
-

@@ -69,3 +69,51 @@ export interface DecodedVideoResult {
   avatarPreviewKind?: 'image' | 'video' | null
   skeletonPreviewKind?: 'image' | 'video' | null
 }
+
+export interface ExerciseFrame {
+  index: number
+  timestamp: number
+  keypoints: Keypoint[]
+  skeletonUrl: string
+}
+
+export interface ExerciseInstructor {
+  id: string
+  filename: string
+  modelId: string
+  state: 'queued' | 'processing' | 'completed' | 'failed'
+  progress: number
+  fps: number
+  frameCount: number
+  duration: number
+  cached: boolean
+  error?: string | null
+  frames: ExerciseFrame[]
+}
+
+export interface JointFeedback {
+  name: string
+  distance: number
+  score: number
+  close: boolean
+  instructor?: [number, number] | null
+  user?: [number, number] | null
+}
+
+export interface ExerciseCompareResult {
+  instructorId: string
+  frameIndex: number
+  matchedInitial: boolean
+  score: number
+  detectedJoints: number
+  jointFeedback: JointFeedback[]
+  userSkeleton: string
+  message?: string | null
+}
+
+export interface ExerciseSummary {
+  averageScore: number
+  bestJoints: JointFeedback[]
+  improveJoints: JointFeedback[]
+  samples: number
+}
