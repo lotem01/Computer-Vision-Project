@@ -4,13 +4,21 @@ import asyncio
 from collections.abc import Callable
 
 from app.config import model_definitions
-from app.domain.contracts import ModelMetadata, ModelState
+from app.domain.contracts import ModelDefinition, ModelMetadata, ModelState
+from app.domain.protocols import PoseModelAdapter
 from app.models.normalizer import NamedKeypointNormalizer
+from app.models.posenet_tflite_adapter import PoseNetTFLiteAdapter
 from app.models.ultralytics_adapter import UltralyticsPoseAdapter
 
 
+def create_pose_adapter(definition: ModelDefinition) -> PoseModelAdapter:
+    if definition.extras.get("adapter") == "posenet_tflite" or definition.path.lower().endswith(".tflite"):
+        return PoseNetTFLiteAdapter(definition)
+    return UltralyticsPoseAdapter(definition)
+
+
 class ModelRegistry:
-    def __init__(self, adapter_factory: Callable = UltralyticsPoseAdapter):
+    def __init__(self, adapter_factory: Callable[[ModelDefinition], PoseModelAdapter] = create_pose_adapter):
         definitions = model_definitions()
         self.adapters = {item.id: adapter_factory(item) for item in definitions}
         self.normalizers = {item.id: NamedKeypointNormalizer(item.joint_names, item.threshold) for item in definitions}
@@ -29,7 +37,7 @@ class ModelRegistry:
                 adapter.set_state(ModelState.FAILED, f"{type(exc).__name__}: {exc}")
         self.completed = True
 
-    def require(self, model_id: str) -> UltralyticsPoseAdapter:
+    def require(self, model_id: str) -> PoseModelAdapter:
         adapter = self.adapters.get(model_id)
         if adapter is None:
             raise KeyError(f"Unknown model: {model_id}")
@@ -50,4 +58,3 @@ class ModelRegistry:
             "totalCount": len(models),
             "models": [item.model_dump(mode="json") for item in models],
         }
-

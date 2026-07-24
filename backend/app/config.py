@@ -13,6 +13,8 @@ LOCAL_CONFIG.mkdir(parents=True, exist_ok=True)
 # Keep third-party runtime state inside the project so the demo is portable.
 os.environ.setdefault("YOLO_CONFIG_DIR", str(LOCAL_CONFIG / "ultralytics"))
 os.environ.setdefault("MPLCONFIGDIR", str(LOCAL_CONFIG / "matplotlib"))
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 COCO_17 = [
     "nose", "l_eye", "r_eye", "l_ear", "r_ear", "l_shoulder", "r_shoulder",
@@ -65,4 +67,15 @@ def model_definitions() -> list[ModelDefinition]:
         ModelDefinition("unified_model", "Unified 13", "A compact joint system trained across unified body-part data.", str(weights / "unified_model.pt"), "Unified body-13", CANONICAL_13, BODY_13_EDGES, **shared),
         ModelDefinition("pseudo_labeled_model", "Pseudo-Labeled", "Student pose model expanded with pseudo-labeled MPII data.", str(weights / "pseudo_labeled_model.pt"), "MPII + pseudo labels", COCO_17, COCO_EDGES, **shared),
         ModelDefinition("yolov8n_pose", "YOLOv8 Baseline", "Fast pretrained baseline for dependable live comparison.", str(weights / "yolov8n-pose.pt"), "Ultralytics COCO", COCO_17, COCO_EDGES, **shared),
+        ModelDefinition(
+            "posenet",
+            "PoseNet MobileNet",
+            "Classic TensorFlow Lite PoseNet baseline optimized for CPU single-person pose estimation.",
+            str(weights / "posenet_mobilenet_v1_100_257x257_multi_kpt_stripped.tflite"),
+            "TensorFlow Lite PoseNet",
+            COCO_17,
+            COCO_EDGES,
+            threshold=0.25,
+            extras={"adapter": "posenet_tflite", "input_size": 257, "output_stride": 32},
+        ),
     ]

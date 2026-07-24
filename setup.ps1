@@ -8,10 +8,32 @@ if (-not (Test-Path "$Root\.venv")) {
   else { & $PythonCommand[0] -m venv "$Root\.venv" }
   if ($LASTEXITCODE -ne 0) { throw 'Could not create the Python virtual environment.' }
 }
-& "$Root\.venv\Scripts\python.exe" -m pip install --upgrade pip
-if ($LASTEXITCODE -ne 0) { throw 'Could not install pip.' }
-& "$Root\.venv\Scripts\python.exe" -m pip install --no-cache-dir -r "$Root\backend\requirements.txt"
-if ($LASTEXITCODE -ne 0) { throw 'Could not install Python dependencies.' }
+$PipRoot = $Root
+$PipDrive = $null
+if ($Root.Length -gt 90) {
+  foreach ($Candidate in @('P', 'Q', 'R', 'S', 'T')) {
+    $DriveName = "$Candidate`:"
+    if (-not (Test-Path "$DriveName\")) {
+      subst $DriveName "$Root"
+      if ($LASTEXITCODE -eq 0) {
+        $PipDrive = $DriveName
+        $PipRoot = "$DriveName\"
+        Write-Host "Using temporary $DriveName drive alias for long-path-safe Python installs..."
+        break
+      }
+    }
+  }
+}
+try {
+  $PipPython = Join-Path $PipRoot ".venv\Scripts\python.exe"
+  $Requirements = Join-Path $PipRoot "backend\requirements.txt"
+  & $PipPython -m pip install --upgrade pip
+  if ($LASTEXITCODE -ne 0) { throw 'Could not install pip.' }
+  & $PipPython -m pip install --no-cache-dir -r $Requirements
+  if ($LASTEXITCODE -ne 0) { throw 'Could not install Python dependencies.' }
+} finally {
+  if ($PipDrive) { subst $PipDrive /D }
+}
 
 Write-Host 'Installing frontend packages...'
 Push-Location "$Root\frontend"

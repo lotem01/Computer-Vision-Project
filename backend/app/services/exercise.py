@@ -23,7 +23,7 @@ CORE_JOINTS = [
     "l_hip", "r_hip", "l_knee", "r_knee", "l_ankle", "r_ankle",
 ]
 MATCH_THRESHOLD = 0.18
-INITIAL_MATCH_SCORE = 70
+INITIAL_MATCH_SCORE = 40
 
 
 def _visible(points: Iterable[Keypoint]) -> dict[str, Keypoint]:

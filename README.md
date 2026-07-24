@@ -1,6 +1,6 @@
 # PoseLab
 
-PoseLab is a local, presentation-ready pose-to-avatar studio. It preloads four Ultralytics pose models, supports camera/image/video input, draws a normalized skeleton, and renders a replaceable avatar output.
+PoseLab is a local, presentation-ready pose-to-avatar studio. It preloads Ultralytics and TensorFlow Lite pose models, supports camera/image/video input, draws a normalized skeleton, and renders a replaceable avatar output.
 
 ## Run locally
 
@@ -45,7 +45,9 @@ Open `http://127.0.0.1:8000`. The readiness screen shows real model loading and 
 
 ### Add or change a model
 
-Edit `backend/app/config.py`. Add one `ModelDefinition` with its weight path, ordered joint names, and skeleton edges. No API or UI changes are required.
+Edit `backend/app/config.py`. Add one `ModelDefinition` with its weight path, ordered joint names, skeleton edges, and optional `extras["adapter"]` when the model is not Ultralytics. No API or UI changes are required.
+
+PoseNet uses `backend/app/models/posenet_tflite_adapter.py` and the downloaded TFLite file in `backend/weights/posenet_mobilenet_v1_100_257x257_multi_kpt_stripped.tflite`.
 
 ### Change the 13-joint mapping
 

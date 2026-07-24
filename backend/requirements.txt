@@ -5,5 +5,6 @@ pydantic==2.10.5
 numpy==1.26.4
 Pillow==11.1.0
 ultralytics==8.3.40
+tensorflow==2.10.1
 pytest==8.3.4
 httpx==0.28.1
