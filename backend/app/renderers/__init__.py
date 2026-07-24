@@ -1,0 +1,2 @@
+"""Replaceable avatar rendering implementations."""
+
